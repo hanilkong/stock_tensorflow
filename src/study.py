@@ -1,62 +1,69 @@
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from sklearn.preprocessing import MinMaxScaler
-import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
 
 def stock_study(file):
-    # Load stock data (You need to have a CSV file with historical stock data)
-    stock_data = pd.read_csv(file)
 
-    # Use 'Close' prices as the target variable to predict
-    y = stock_data['Close'].values
+    # Load historical stock data (replace 'stock_data.csv' with your dataset)
+    data = pd.read_csv('stock_data.csv')
 
-    # Feature scaling
-    scaler = MinMaxScaler()
-    y = y.reshape(-1, 1)
-    y = scaler.fit_transform(y)
+    # Assuming the data has columns like 'Open', 'High', 'Low', 'Close', 'Volume', etc.
+    # You might also have technical indicators calculated from this data.
+
+    # Create a column indicating the price movement for each stock (1 for rise, 0 for fall)
+    data['PriceMovement'] = np.where(
+        data['Close'].shift(-1) > data['Close'], 1, 0)
+
+    # Split data into features (X) and labels (y)
+    # Remove 'Date' column and the target column
+    X = data.drop(['PriceMovement', 'Date'], axis=1)
+    y = data['PriceMovement']
 
     # Split data into training and testing sets
-    train_size = int(0.8 * len(y))
-    train_data = y[:train_size]
-    test_data = y[train_size:]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42)
 
-    # Create sequences for training
+    # Standardize the feature data
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
 
-    def create_sequences(data, seq_length):
-        sequences = []
-        for i in range(len(data) - seq_length):
-            sequences.append(data[i:i+seq_length])
-        return np.array(sequences)
-
-    seq_length = 10
-    X_train = create_sequences(train_data, seq_length)
-    X_test = create_sequences(test_data, seq_length)
-
-    # Build the neural network model
-    model = tf.keras.Sequential([
-        tf.keras.layers.LSTM(50, activation='relu',
-                             input_shape=(seq_length, 1)),
-        tf.keras.layers.Dense(1)
+    # Build a neural network model using TensorFlow
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Input(shape=(X_train_scaled.shape[1],)),
+        tf.keras.layers.Dense(64, activation='relu'),
+        tf.keras.layers.Dense(32, activation='relu'),
+        # Binary classification output
+        tf.keras.layers.Dense(1, activation='sigmoid')
     ])
 
-    model.compile(optimizer='adam', loss='mse')
+    # Compile the model
+    model.compile(optimizer='adam', loss='binary_crossentropy',
+                  metrics=['accuracy'])
 
     # Train the model
-    model.fit(X_train, train_data[seq_length:], epochs=50, batch_size=32)
+    model.fit(X_train_scaled, y_train, epochs=10,
+              batch_size=32, validation_split=0.2)
 
-    # Make predictions
-    predicted_data = model.predict(X_test)
-    predicted_data = scaler.inverse_transform(predicted_data)
+    # Evaluate the model on the test data
+    loss, accuracy = model.evaluate(X_test_scaled, y_test)
+    print(f"Test accuracy: {accuracy:.2f}")
 
-    # Visualize the results
-    plt.figure(figsize=(10, 6))
-    plt.plot(stock_data['Close'].values[train_size +
-             seq_length:], label='Actual Prices')
-    plt.plot(predicted_data, label='Predicted Prices', linestyle='dashed')
-    plt.xlabel('Time')
-    plt.ylabel('Stock Price')
-    plt.title('Stock Price Prediction using LSTM')
-    plt.legend()
-    plt.show()
+    # Now you can prepare new data for prediction (similar to previous examples)
+    # Create a DataFrame with the required features for prediction
+    new_data = pd.DataFrame(...)
+    new_data_scaled = scaler.transform(new_data)
+
+    # Make predictions using the trained model
+    predicted_probabilities = model.predict(new_data_scaled)
+    predicted_movements = (predicted_probabilities > 0.5).astype(
+        int)  # Convert probabilities to binary predictions
+
+    for i, movement in enumerate(predicted_movements):
+        if movement == 1:
+            print(f"Predicted: Stock {i+1} price will rise.")
+        else:
+            print(f"Predicted: Stock {i+1} price will fall.")

@@ -7,7 +7,8 @@ def main():
     # return
     # finance.get_finance()
     # study.stock_study('./stock_data.csv')
-    lstm.stock('005930.KS')
+    # lstm.stock('TSLA')
+    lstm.tesla()
 
 
 if __name__ == '__main__':
